@@ -1,3 +1,5 @@
+// Connect to wifi and get time
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <time.h>

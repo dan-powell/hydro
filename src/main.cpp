@@ -1,11 +1,9 @@
 /*********
-  Complete project details at https://randomnerdtutorials.com
-  
-  This is an example for our Monochrome OLEDs based on SSD1306 drivers. Pick one up today in the adafruit shop! ------> http://www.adafruit.com/category/63_98
-  This example is for a 128x32 pixel display using I2C to communicate 3 pins are required to interface (two I2C and one reset).
-  Adafruit invests time and resources providing this open source code, please support Adafruit and open-source hardware by purchasing products from Adafruit!
-  Written by Limor Fried/Ladyada for Adafruit Industries, with contributions from the open source community. BSD license, check license.txt for more information All text above, and the splash screen below must be included in any redistribution. 
+  Basic Hydroponics Pump Timer
+  Uses ESP32 time library to manage system clock: https://github.com/fbiego/ESP32Time
+
 *********/
+
 #include <config.h>
 #include <Arduino.h>
 #include <WiFi.h>
@@ -36,6 +34,13 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #include <bitmaps.h>
 
+int pump_times[] = {10, 11, 14, 15};
+int pump_times_length = 4;
+bool pump_times_state[] = {false, false, false, true};
+int pump_seconds = 10;
+
+bool pump_times_state_temp[3];
+
 void debug(String line) {
   // Serial output
   Serial.println(line);
@@ -46,6 +51,67 @@ void debug(String line) {
   display.println(line);
   display.display();
   delay(1000);
+}
+
+void timer_setup(void) {
+  for (int i = 0; i < pump_times_length; i++) {     
+    pump_times_state_temp[i] = pump_times_state[i];     
+  }
+}
+
+int timer_next(void) {
+  for (int i=0; i<pump_times_length; i++) {
+    if (pump_times_state_temp[i] == true) {
+      return pump_times[i];
+      break;
+    }
+  }
+  return 0;
+}
+
+bool timer_getstate(int hour) {
+  int wantedpos;
+  for (int i=0; i<pump_times_length; i++) {
+    if (hour = pump_times[i]) {
+      wantedpos = i;
+      break;
+    }
+  }
+  return pump_times_state_temp[wantedpos];
+}
+
+bool timer_setstate(int hour, bool value) {
+  int wantedpos;
+  for (int i=0; i<pump_times_length; i++) {
+    if (hour = pump_times[i]) {
+      wantedpos = i;
+      break;
+    }
+  }
+  pump_times_state_temp[wantedpos] = value;
+}
+
+void pump_run(void) {
+  // Turn relay on
+  debug("Running Pump");
+  digitalWrite(RELAY_PIN_1, LOW);
+  delay(pump_seconds * 1000);
+  // Turn relay off
+  digitalWrite(RELAY_PIN_1, HIGH);
+}
+
+void timer_check(void) {
+  int hour = rtc.getHour(true);
+  int next_hour = timer_next();
+  // Check if we have reached next time
+  if (hour == next_hour) {
+    // Check if time has run or not
+    bool state = timer_getstate(next_hour);
+    if (state) {
+      pump_run();
+      // timer_setstate(next_hour, false);
+    }
+  }
 }
 
 void updateTimeNtp(void) {
@@ -80,19 +146,21 @@ void updateTimeNtp(void) {
 
 }
 
-void drawtime(void) {
-
-  display.clearDisplay();
+void draw_time(void) {
   display.setTextSize(2); // Draw 2X-scale text
   display.setTextColor(WHITE);
   display.setCursor(0, 0);
-
   struct tm timeinfo = rtc.getTimeStruct();
   display.println(&timeinfo, "%H:%M:%S");
-
-  display.display();      // Show initial text
 }
 
+void draw_pump(void) {
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 20);
+  int hour = timer_next();
+  display.println(hour);
+}
 
 
 void setup() {
@@ -115,12 +183,14 @@ void setup() {
 
   // Update system clock from NTP
   updateTimeNtp();
+  timer_setup();
 }
 
 void loop() {
-  delay(1000);
-  digitalWrite(RELAY_PIN_1, LOW);
-  delay(1000);
-  digitalWrite(RELAY_PIN_1, HIGH);
-  drawtime();
+  display.clearDisplay();
+  timer_check();
+  draw_time();
+  draw_pump();
+  display.display();
+  delay(500);
 }
