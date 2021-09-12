@@ -31,27 +31,10 @@ const int   daylightOffset_sec = 3600;
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-#define NUMFLAKES     10 // Number of snowflakes in the animation example
+#define LOGO_HEIGHT   64
+#define LOGO_WIDTH    64
 
-#define LOGO_HEIGHT   16
-#define LOGO_WIDTH    16
-static const unsigned char PROGMEM logo_bmp[] =
-{ B00000000, B11000000,
-  B00000001, B11000000,
-  B00000001, B11000000,
-  B00000011, B11100000,
-  B11110011, B11100000,
-  B11111110, B11111000,
-  B01111110, B11111111,
-  B00110011, B10011111,
-  B00011111, B11111100,
-  B00001101, B01110000,
-  B00011011, B10100000,
-  B00111111, B11100000,
-  B00111111, B11110000,
-  B01111100, B11110000,
-  B01110000, B01110000,
-  B00000000, B00110000 };
+#include <bitmaps.h>
 
 void debug(String line) {
   // Serial output
@@ -70,8 +53,8 @@ void updateTimeNtp(void) {
   display.clearDisplay();
 
   // Connect to Wi-Fi
-  debug("Connecting to Wifi: " + String(ssid));
-  WiFi.begin(ssid, password);
+  debug("Connecting to Wifi: " + String(wifi_ssid));
+  WiFi.begin(wifi_ssid, wifi_password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
@@ -115,6 +98,7 @@ void drawtime(void) {
 void setup() {
   Serial.begin(115200);
 
+  // Set default pin status
   pinMode(RELAY_PIN_1, OUTPUT);
 
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
@@ -123,10 +107,11 @@ void setup() {
     for(;;); // Don't proceed, loop forever
   }
 
-  // Show initial display buffer contents on the screen --
-  // the library initializes this with an Adafruit splash screen.
+  // Display boot logo
+  display.clearDisplay();
+  display.drawBitmap(32, 0, bmp_logo, 64, 64, 1);
   display.display();
-  delay(2000); // Pause for 2 seconds
+  delay(4000);
 
   // Update system clock from NTP
   updateTimeNtp();
