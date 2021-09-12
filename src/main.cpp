@@ -2,7 +2,18 @@
   Basic Hydroponics Pump Timer
   Uses ESP32 time library to manage system clock: https://github.com/fbiego/ESP32Time
 
+  TODO
+
+  // Pump Timer
+  // Define an array of times (hours?) for the pump to run
+
+
+
+
 *********/
+
+
+
 
 #include <config.h>
 #include <Arduino.h>
@@ -34,12 +45,12 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #include <bitmaps.h>
 
-int pump_times[] = {10, 11, 14, 15};
-int pump_times_length = 4;
-bool pump_times_state[] = {false, false, false, true};
+int pump_times[] = {10, 11, 14, 16, 17, 18};
+int pump_times_length = 6;
+bool pump_times_state[] = {true, true, true, true, true, true};
 int pump_seconds = 10;
 
-bool pump_times_state_temp[3];
+bool pump_times_state_temp[6];
 
 void debug(String line) {
   // Serial output
@@ -50,7 +61,7 @@ void debug(String line) {
   display.setTextColor(WHITE);
   display.println(line);
   display.display();
-  delay(1000);
+  delay(500);
 }
 
 void timer_setup(void) {
@@ -59,20 +70,10 @@ void timer_setup(void) {
   }
 }
 
-int timer_next(void) {
-  for (int i=0; i<pump_times_length; i++) {
-    if (pump_times_state_temp[i] == true) {
-      return pump_times[i];
-      break;
-    }
-  }
-  return 0;
-}
-
 bool timer_getstate(int hour) {
   int wantedpos;
   for (int i=0; i<pump_times_length; i++) {
-    if (hour = pump_times[i]) {
+    if (hour == pump_times[i]) {
       wantedpos = i;
       break;
     }
@@ -83,7 +84,7 @@ bool timer_getstate(int hour) {
 bool timer_setstate(int hour, bool value) {
   int wantedpos;
   for (int i=0; i<pump_times_length; i++) {
-    if (hour = pump_times[i]) {
+    if (hour == pump_times[i]) {
       wantedpos = i;
       break;
     }
@@ -91,13 +92,27 @@ bool timer_setstate(int hour, bool value) {
   pump_times_state_temp[wantedpos] = value;
 }
 
+int timer_next(void) {
+  int hour = rtc.getHour(true);
+  for (int i=0; i<pump_times_length; i++) {
+    if (pump_times[i] >= hour) {
+      bool state = timer_getstate(pump_times[i]);
+      if(state == true) {
+        return pump_times[i];
+        break;
+      }
+    }
+  }
+  return 0;
+}
+
 void pump_run(void) {
   // Turn relay on
   debug("Running Pump");
-  digitalWrite(RELAY_PIN_1, LOW);
+  digitalWrite(RELAY_PIN_1, HIGH);
   delay(pump_seconds * 1000);
   // Turn relay off
-  digitalWrite(RELAY_PIN_1, HIGH);
+  digitalWrite(RELAY_PIN_1, LOW);
 }
 
 void timer_check(void) {
@@ -107,9 +122,9 @@ void timer_check(void) {
   if (hour == next_hour) {
     // Check if time has run or not
     bool state = timer_getstate(next_hour);
-    if (state) {
+    if (state == true) {
       pump_run();
-      // timer_setstate(next_hour, false);
+      timer_setstate(next_hour, false);
     }
   }
 }
@@ -168,6 +183,7 @@ void setup() {
 
   // Set default pin status
   pinMode(RELAY_PIN_1, OUTPUT);
+  digitalWrite(RELAY_PIN_1, LOW);
 
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
