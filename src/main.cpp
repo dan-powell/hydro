@@ -4,16 +4,12 @@
 
   TODO
 
-  // Pump Timer
-  // Define an array of times (hours?) for the pump to run
-
-
+* Fix issue with hour == 0 & reset
+* Handle incorrect time or not being able to update from wifi
+* Allow any time, not just on the hour. (Maybe store times in seconds elapsed?)
 
 
 *********/
-
-
-
 
 #include <config.h>
 #include <Arduino.h>
@@ -26,10 +22,6 @@
 #include <Adafruit_SSD1306.h>
 
 ESP32Time rtc;
-
-const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 3600;
-const int   daylightOffset_sec = 3600;
 
 #define RELAY_PIN_1 17 // Pin for relay 1
 
@@ -45,14 +37,10 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #include <bitmaps.h>
 
-int pump_times[] = {10, 11, 14, 16, 17, 18};
-int pump_times_length = 6;
-bool pump_times_state[] = {true, true, true, true, true, true};
-int pump_seconds = 10;
+int pump_times_length = 0;
+bool pump_times_status[24];
 
-bool pump_times_state_temp[6];
-
-void debug(String line) {
+void debug(String line, String line2 = "") {
   // Serial output
   Serial.println(line);
   // Display
@@ -60,38 +48,50 @@ void debug(String line) {
   display.setCursor(0, 10);
   display.setTextColor(WHITE);
   display.println(line);
+  display.println(line2);
   display.display();
   delay(500);
 }
 
+// Setup/Reset the timers for the day
 void timer_setup(void) {
+  // Get the length of pump_times array for looping later
+  pump_times_length = sizeof(pump_times)/sizeof(pump_times[0]);
+  // Reset the status of all pumping times (true = ready)
   for (int i = 0; i < pump_times_length; i++) {     
-    pump_times_state_temp[i] = pump_times_state[i];     
+    pump_times_status[i] = true;     
   }
 }
 
+// Get the state of a particular time
 bool timer_getstate(int hour) {
-  int wantedpos;
+  // Find the index that matches hour
+  int index = 0;
   for (int i=0; i<pump_times_length; i++) {
     if (hour == pump_times[i]) {
-      wantedpos = i;
+      index = i;
       break;
     }
   }
-  return pump_times_state_temp[wantedpos];
+  // Return current status
+  return pump_times_status[index];
 }
 
-bool timer_setstate(int hour, bool value) {
-  int wantedpos;
+// Set the state of a time
+void timer_setstate(int hour, bool value) {
+  int index = 0;
+  // Find the index that matches hour
   for (int i=0; i<pump_times_length; i++) {
     if (hour == pump_times[i]) {
-      wantedpos = i;
+      index = i;
       break;
     }
   }
-  pump_times_state_temp[wantedpos] = value;
+  // Update status as per value
+  pump_times_status[index] = value;
 }
 
+// Get the next timer that is ready
 int timer_next(void) {
   int hour = rtc.getHour(true);
   for (int i=0; i<pump_times_length; i++) {
@@ -103,18 +103,31 @@ int timer_next(void) {
       }
     }
   }
+  // No time was found, so check we are at end of day. 
+  if(hour == 0) {
+    // Reset Timers
+    timer_setup();
+  }
   return 0;
 }
 
+// Run the pump
 void pump_run(void) {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.println("Watering");
+  display.display();
+
   // Turn relay on
-  debug("Running Pump");
   digitalWrite(RELAY_PIN_1, HIGH);
-  delay(pump_seconds * 1000);
+  delay(pump_duration * 1000);
   // Turn relay off
   digitalWrite(RELAY_PIN_1, LOW);
 }
 
+// Check if we need to run the next time
 void timer_check(void) {
   int hour = rtc.getHour(true);
   int next_hour = timer_next();
@@ -134,7 +147,7 @@ void updateTimeNtp(void) {
   display.clearDisplay();
 
   // Connect to Wi-Fi
-  debug("Connecting to Wifi: " + String(wifi_ssid));
+  debug("Connecting to Wifi: ", String(wifi_ssid));
   WiFi.begin(wifi_ssid, wifi_password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -170,11 +183,19 @@ void draw_time(void) {
 }
 
 void draw_pump(void) {
-  display.setTextSize(2);
+  display.setTextSize(1);
   display.setTextColor(WHITE);
-  display.setCursor(0, 20);
+  display.setCursor(0, 30);
   int hour = timer_next();
-  display.println(hour);
+  display.println("Next watering:");
+  display.setCursor(0, 50);
+  display.setTextSize(2);
+  if(hour == 0) {
+    display.println("Tomorrow");
+  } else {
+    display.println(String(hour) + " o\'clock");
+  }
+  
 }
 
 
@@ -208,5 +229,5 @@ void loop() {
   draw_time();
   draw_pump();
   display.display();
-  delay(500);
+  delay(100);
 }
