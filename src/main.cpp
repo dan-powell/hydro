@@ -5,8 +5,6 @@
   TODO
 
 * Fix issue with hour == 0 & reset
-* Handle incorrect time or not being able to update from wifi
-
 
 *********/
 
@@ -151,6 +149,28 @@ void timer_check(void) {
   }
 }
 
+
+void getTimeNTP(void) {
+
+  
+  debug("Updating time");
+  struct tm timeinfo;
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  getLocalTime(&timeinfo);
+  rtc.setTimeStruct(timeinfo);
+
+  // Check if the time is valid
+  if (rtc.getHour() == 0 && rtc.getMinute() == 0) {
+    debug("Invalid time - retry");
+    delay(5000);
+    getTimeNTP();
+  }
+
+  debug("Time updated");
+
+}
+
+// Init and get the time
 void updateTimeNtp(void) {
   
   display.clearDisplay();
@@ -163,32 +183,16 @@ void updateTimeNtp(void) {
     Serial.print(".");
   }
   debug("Wifi connected");
+
+  // Retrieve time from NTP server
+  getTimeNTP();
   
-  // Init and get the time
-  debug("Updating time");
-  struct tm timeinfo;
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  getLocalTime(&timeinfo);
-  rtc.setTimeStruct(timeinfo);
-
-  if (rtc.getHour() == 0 && rtc.getMinute() == 0) {
-    debug("Time invalid - Try again");
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-    getLocalTime(&timeinfo);
-    rtc.setTimeStruct(timeinfo);
-  }
-
-  debug("Time updated");
-  display.println(&timeinfo, "%d %Y %H:%M:%S");
-
   // Disconnect WiFi as it's no longer needed
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
 
   debug("Wifi disconnected");
-
   display.clearDisplay();
-
 }
 
 void draw_time(void) {
