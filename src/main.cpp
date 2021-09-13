@@ -6,7 +6,6 @@
 
 * Fix issue with hour == 0 & reset
 * Handle incorrect time or not being able to update from wifi
-* Allow any time, not just on the hour. (Maybe store times in seconds elapsed?)
 
 
 *********/
@@ -64,38 +63,46 @@ void timer_setup(void) {
 }
 
 // Get the state of a particular time
-bool timer_getstate(int hour) {
+bool timer_getstate(int time) {
   // Find the index that matches hour
-  int index = 0;
+  int index = -1;
   for (int i=0; i<pump_times_length; i++) {
-    if (hour == pump_times[i]) {
+    if (time == pump_times[i]) {
       index = i;
       break;
     }
   }
-  // Return current status
-  return pump_times_status[index];
+  if (index == -1) {
+    return true;
+  } else {
+    // Return current status
+    return pump_times_status[index];
+  }
 }
 
 // Set the state of a time
-void timer_setstate(int hour, bool value) {
-  int index = 0;
+void timer_setstate(int time, bool value) {
+  int index = -1;
   // Find the index that matches hour
   for (int i=0; i<pump_times_length; i++) {
-    if (hour == pump_times[i]) {
+    if (time == pump_times[i]) {
       index = i;
       break;
     }
   }
-  // Update status as per value
-  pump_times_status[index] = value;
+  if (index != -1) {
+    // Update status as per value
+    pump_times_status[index] = value;
+  }
 }
 
 // Get the next timer that is ready
 int timer_next(void) {
   int hour = rtc.getHour(true);
+  int minute = rtc.getMinute();
+  int time = (hour * 60) + minute;
   for (int i=0; i<pump_times_length; i++) {
-    if (pump_times[i] >= hour) {
+    if (pump_times[i] >= time) {
       bool state = timer_getstate(pump_times[i]);
       if(state == true) {
         return pump_times[i];
@@ -104,7 +111,7 @@ int timer_next(void) {
     }
   }
   // No time was found, so check we are at end of day. 
-  if(hour == 0) {
+  if(time == 0) {
     // Reset Timers
     timer_setup();
   }
@@ -130,14 +137,16 @@ void pump_run(void) {
 // Check if we need to run the next time
 void timer_check(void) {
   int hour = rtc.getHour(true);
-  int next_hour = timer_next();
+  int minute = rtc.getMinute();
+  int time = (hour * 60) + minute;
+  int next_time = timer_next();
   // Check if we have reached next time
-  if (hour == next_hour) {
+  if (time == next_time) {
     // Check if time has run or not
-    bool state = timer_getstate(next_hour);
+    bool state = timer_getstate(next_time);
     if (state == true) {
       pump_run();
-      timer_setstate(next_hour, false);
+      timer_setstate(next_time, false);
     }
   }
 }
@@ -153,22 +162,30 @@ void updateTimeNtp(void) {
     delay(500);
     Serial.print(".");
   }
-  debug("Wifi Connected");
+  debug("Wifi connected");
   
   // Init and get the time
-  debug("Updating Time");
+  debug("Updating time");
   struct tm timeinfo;
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
   getLocalTime(&timeinfo);
   rtc.setTimeStruct(timeinfo);
-  debug("Time Updated");
+
+  if (rtc.getHour() == 0 && rtc.getMinute() == 0) {
+    debug("Time invalid - Try again");
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    getLocalTime(&timeinfo);
+    rtc.setTimeStruct(timeinfo);
+  }
+
+  debug("Time updated");
   display.println(&timeinfo, "%d %Y %H:%M:%S");
 
   // Disconnect WiFi as it's no longer needed
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
 
-  debug("Wifi Disconnected");
+  debug("Wifi disconnected");
 
   display.clearDisplay();
 
@@ -186,14 +203,22 @@ void draw_pump(void) {
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0, 30);
-  int hour = timer_next();
   display.println("Next watering:");
   display.setCursor(0, 50);
   display.setTextSize(2);
-  if(hour == 0) {
+  int time = timer_next();
+  if(time == 0) {
     display.println("Tomorrow");
   } else {
-    display.println(String(hour) + " o\'clock");
+    int hour = floor(time/60);
+    int minute = round((((float)time/60) - (float)hour) * 60);
+    if(minute == 0) {
+      display.println(String(hour) + ":00");
+    } else if(minute < 10) {
+      display.println(String(hour) + ":0" + String(minute));
+    } else {
+      display.println(String(hour) + ":" + String(minute));
+    }
   }
   
 }
