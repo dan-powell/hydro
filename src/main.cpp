@@ -35,7 +35,9 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #include <bitmaps.h>
 
 int pump_times_length = 0;
-bool pump_times_status[24];
+bool pump_times_status[100];
+
+bool reset = false;
 
 void debug(String line, String line2 = "") {
   // Serial output
@@ -108,11 +110,6 @@ int timer_next(void) {
       }
     }
   }
-  // No time was found, so check we are at end of day. 
-  if(time == 0) {
-    // Reset Timers
-    timer_setup();
-  }
   return 0;
 }
 
@@ -149,9 +146,26 @@ void timer_check(void) {
   }
 }
 
+// Check if we need to reset the timers
+void reset_check(void) {
+  // get the time elapsed in minutes
+  int hour = rtc.getHour(true);
+  int minute = rtc.getMinute();
+  int time = (hour * 60) + minute;
+  // just after midnight
+  if(time == 1 && reset == false) {
+    // Reset Timers
+    debug("Resetting timers");
+    timer_setup();
+    reset = true;
+  }
+  // reset the reset
+  if(time == 2) {
+    reset = false;
+  }
+}
 
 void getTimeNTP(void) {
-
   
   debug("Updating time");
   struct tm timeinfo;
@@ -258,5 +272,6 @@ void loop() {
   draw_time();
   draw_pump();
   display.display();
+  reset_check();
   delay(100);
 }
