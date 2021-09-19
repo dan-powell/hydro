@@ -73,7 +73,7 @@ bool timer_getstate(int time) {
     }
   }
   if (index == -1) {
-    return true;
+    return false;
   } else {
     // Return current status
     return pump_times_status[index];
@@ -110,7 +110,7 @@ int timer_next(void) {
       }
     }
   }
-  return 0;
+  return -1;
 }
 
 // Run the pump
@@ -225,7 +225,7 @@ void draw_pump(void) {
   display.setCursor(0, 50);
   display.setTextSize(2);
   int time = timer_next();
-  if(time == 0) {
+  if(time == -1) {
     display.println("Tomorrow");
   } else {
     int hour = floor(time/60);

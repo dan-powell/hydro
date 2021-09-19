@@ -35,4 +35,4 @@ int pump_times[] = {
     1325, // 22:05
     1330, // 22:10
 };
-int pump_duration = 3; // in seconds
+int pump_duration = 10; // in seconds
