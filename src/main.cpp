@@ -20,8 +20,6 @@
 
 ESP32Time rtc;
 
-#define RELAY_PIN_1 17 // Pin for relay 1
-
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
@@ -34,8 +32,23 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #include <bitmaps.h>
 
+// Setup some variables to hold status
 int pump_times_length = 0;
 bool pump_times_status[100];
+
+int light_times_length = 0;
+bool light_times_status[100];
+
+int fan_times_length = 0;
+bool fan_times_status[1440];
+
+const int pwm_channel_fan = 1;
+const int pwm_channel_light1 = 2;
+const int pwm_channel_light2 = 3;
+
+int pwm_channel_fan_status = 0;
+int pwm_channel_light1_status = 0;
+int pwm_channel_light2_status = 0;
 
 bool reset = false;
 
@@ -53,17 +66,26 @@ void debug(String line, String line2 = "") {
 }
 
 // Setup/Reset the timers for the day
-void timer_setup(void) {
+void timers_setup(void) {
   // Get the length of pump_times array for looping later
   pump_times_length = sizeof(pump_times)/sizeof(pump_times[0]);
-  // Reset the status of all pumping times (true = ready)
+  light_times_length = sizeof(light_times)/sizeof(light_times[0]);
+  fan_times_length = sizeof(fan_times)/sizeof(fan_times[0]);
+
+  // Reset the status of all timers (true = ready)
   for (int i = 0; i < pump_times_length; i++) {     
     pump_times_status[i] = true;     
+  }
+  for (int i = 0; i < light_times_length; i++) {     
+    light_times_status[i] = true;     
+  }
+  for (int i = 0; i < fan_times_length; i++) {     
+    fan_times_status[i] = true;     
   }
 }
 
 // Get the state of a particular time
-bool timer_getstate(int time) {
+bool timer_pump_getstate(int time) {
   // Find the index that matches hour
   int index = -1;
   for (int i=0; i<pump_times_length; i++) {
@@ -81,7 +103,7 @@ bool timer_getstate(int time) {
 }
 
 // Set the state of a time
-void timer_setstate(int time, bool value) {
+void timer_pump_setstate(int time, bool value) {
   int index = -1;
   // Find the index that matches hour
   for (int i=0; i<pump_times_length; i++) {
@@ -97,13 +119,13 @@ void timer_setstate(int time, bool value) {
 }
 
 // Get the next timer that is ready
-int timer_next(void) {
+int timer_pump_next(void) {
   int hour = rtc.getHour(true);
   int minute = rtc.getMinute();
   int time = (hour * 60) + minute;
   for (int i=0; i<pump_times_length; i++) {
     if (pump_times[i] >= time) {
-      bool state = timer_getstate(pump_times[i]);
+      bool state = timer_pump_getstate(pump_times[i]);
       if(state == true) {
         return pump_times[i];
         break;
@@ -123,28 +145,81 @@ void pump_run(void) {
   display.display();
 
   // Turn relay on
-  digitalWrite(RELAY_PIN_1, HIGH);
+  digitalWrite(PIN_PUMP, HIGH);
   delay(pump_duration * 1000);
   // Turn relay off
-  digitalWrite(RELAY_PIN_1, LOW);
+  digitalWrite(PIN_PUMP, LOW);
+}
+
+void fan_update(int duty) {
+  ledcWrite(pwm_channel_fan, duty);  
 }
 
 // Check if we need to run the next time
-void timer_check(void) {
+void timer_pump_check(void) {
   int hour = rtc.getHour(true);
   int minute = rtc.getMinute();
   int time = (hour * 60) + minute;
-  int next_time = timer_next();
+  int next_time = timer_pump_next();
   // Check if we have reached next time
   if (time == next_time) {
     // Check if time has run or not
-    bool state = timer_getstate(next_time);
+    bool state = timer_pump_getstate(next_time);
     if (state == true) {
       pump_run();
-      timer_setstate(next_time, false);
+      timer_pump_setstate(next_time, false);
     }
   }
 }
+
+int get_time_minutes() {
+  int hour = rtc.getHour(true);
+  int minute = rtc.getMinute();
+  return (hour * 60) + minute;
+}
+
+
+void timer_fan_check(void) {
+  int time = get_time_minutes();
+
+  // Loop over times
+  for (int i=0; i<fan_times_length; i++) {
+    if (fan_times[i][0] == time) {
+      if (fan_times_status[i] == true) {
+        ledcWrite(pwm_channel_fan, fan_times[i][1]);
+        pwm_channel_fan_status = fan_times[i][1];
+        fan_times_status[i] = false;
+      }
+    }
+  }
+}
+
+
+void timer_light_check(void) {
+  int time = get_time_minutes();
+  for (int i=0; i<light_times_length; i++) {
+    if (light_times[i][0] == time) {
+      if (light_times_status[i] == true) {
+        if (light_times[i][1] == 0) {
+          ledcWrite(pwm_channel_light1, light_times[i][2]);
+          ledcWrite(pwm_channel_light2, light_times[i][2]);
+          pwm_channel_light1_status = light_times[i][2];
+          pwm_channel_light2_status = light_times[i][2];
+        }
+        if (light_times[i][1] == 1) {
+          ledcWrite(pwm_channel_light1, light_times[i][2]);
+          pwm_channel_light1_status = light_times[i][2];
+        }
+        if (light_times[i][1] == 2) {
+          ledcWrite(pwm_channel_light2, light_times[i][2]);
+          pwm_channel_light2_status = light_times[i][2];
+        }
+        light_times_status[i] = false;
+      }
+    }
+  }
+}
+
 
 // Check if we need to reset the timers
 void reset_check(void) {
@@ -156,7 +231,7 @@ void reset_check(void) {
   if(time == 1 && reset == false) {
     // Reset Timers
     debug("Resetting timers");
-    timer_setup();
+    timers_setup();
     reset = true;
   }
   // reset the reset
@@ -213,29 +288,45 @@ void draw_time(void) {
   display.setTextSize(2); // Draw 2X-scale text
   display.setTextColor(WHITE);
   display.setCursor(0, 0);
-  struct tm timeinfo = rtc.getTimeStruct();
-  display.println(&timeinfo, "%H:%M:%S");
+  bool water = digitalRead(PIN_WATER);
+  if(water) {
+    display.println("~ OK");
+  } else {
+    display.println(" ~ LOW");
+  }
+
+  display.setTextSize(1);
+  display.setCursor(0, 20);
+  display.println("Light 1 " + String((int)floor((float)pwm_channel_light1_status/255*100)) + "%");
+  display.print("Light 2 " + String((int)floor((float)pwm_channel_light2_status/255*100)) + "%");
+  display.setCursor(80, 20);
+  display.println("Fan " + String((int)floor((float)pwm_channel_fan_status/255*100)) + "%");
 }
 
 void draw_pump(void) {
   display.setTextSize(1);
   display.setTextColor(WHITE);
-  display.setCursor(0, 30);
-  display.println("Next watering:");
-  display.setCursor(0, 50);
+  display.setCursor(0, 39);
+  struct tm timeinfo = rtc.getTimeStruct();
+  display.print("Time: ");
+  display.print(&timeinfo, "%H:%M:%S");
+  display.setCursor(0, 48);
+  display.println("Next");
+  display.println("Water:");
+  display.setCursor(40, 50);
   display.setTextSize(2);
-  int time = timer_next();
+  int time = timer_pump_next();
   if(time == -1) {
-    display.println("Tomorrow");
+    display.print("Tomorrow");
   } else {
     int hour = floor(time/60);
     int minute = round((((float)time/60) - (float)hour) * 60);
     if(minute == 0) {
-      display.println(String(hour) + ":00");
+      display.print(String(hour) + ":00");
     } else if(minute < 10) {
-      display.println(String(hour) + ":0" + String(minute));
+      display.print(String(hour) + ":0" + String(minute));
     } else {
-      display.println(String(hour) + ":" + String(minute));
+      display.print(String(hour) + ":" + String(minute));
     }
   }
   
@@ -246,8 +337,22 @@ void setup() {
   Serial.begin(115200);
 
   // Set default pin status
-  pinMode(RELAY_PIN_1, OUTPUT);
-  digitalWrite(RELAY_PIN_1, LOW);
+  pinMode(PIN_PUMP, OUTPUT);
+  digitalWrite(PIN_PUMP, LOW);
+  pinMode(PIN_WATER, INPUT);
+
+  // Set PWM pins
+  // Fan
+  ledcSetup(pwm_channel_fan, pwm_frequency, pwm_resolution);
+  ledcAttachPin(PIN_FAN, pwm_channel_fan);
+  ledcWrite(pwm_channel_fan, 0);
+  // Lights 1 & 2
+  ledcSetup(pwm_channel_light1, pwm_frequency, pwm_resolution);
+  ledcAttachPin(PIN_LIGHT1, pwm_channel_light1);
+  ledcWrite(pwm_channel_light1, 0);
+  ledcSetup(pwm_channel_light2, pwm_frequency, pwm_resolution);
+  ledcAttachPin(PIN_LIGHT2, pwm_channel_light2);
+  ledcWrite(pwm_channel_light2, 0);
 
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
@@ -263,12 +368,14 @@ void setup() {
 
   // Update system clock from NTP
   updateTimeNtp();
-  timer_setup();
+  timers_setup();
 }
 
 void loop() {
   display.clearDisplay();
-  timer_check();
+  timer_pump_check();
+  timer_fan_check();
+  timer_light_check();
   draw_time();
   draw_pump();
   display.display();
