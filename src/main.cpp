@@ -46,6 +46,10 @@ int pwm_channel_fan_status = 0;
 int pwm_channel_light1_status = 0;
 int pwm_channel_light2_status = 0;
 
+// Levels the lights should fade to (see lights_update)
+int light1_target = 0;
+int light2_target = 0;
+
 bool reset = false;
 
 void debug(String line, String line2 = "") {
@@ -196,24 +200,36 @@ void timer_light_check(void) {
   for (int i=0; i<light_times_length; i++) {
     if (light_times[i][0] == time) {
       if (light_times_status[i] == true) {
-        if (light_times[i][1] == 0) {
-          ledcWrite(PIN_LIGHT1, light_times[i][2]);
-          ledcWrite(PIN_LIGHT2, light_times[i][2]);
-          pwm_channel_light1_status = light_times[i][2];
-          pwm_channel_light2_status = light_times[i][2];
+        // Set the targets only - lights_update does the fading
+        if (light_times[i][1] == 0 || light_times[i][1] == 1) {
+          light1_target = light_times[i][2];
         }
-        if (light_times[i][1] == 1) {
-          ledcWrite(PIN_LIGHT1, light_times[i][2]);
-          pwm_channel_light1_status = light_times[i][2];
-        }
-        if (light_times[i][1] == 2) {
-          ledcWrite(PIN_LIGHT2, light_times[i][2]);
-          pwm_channel_light2_status = light_times[i][2];
+        if (light_times[i][1] == 0 || light_times[i][1] == 2) {
+          light2_target = light_times[i][2];
         }
         light_times_status[i] = false;
       }
     }
   }
+}
+
+
+// Start fading a light towards its target, if it isn't already there.
+// The original ESP32 can't interrupt a running hardware fade, so if one is
+// still going ledcFade fails and we try again on the next loop.
+void light_fade_to(int pin, int &status, int target) {
+  if (status == target) return;
+  if (light_fade_ms <= 0) {
+    ledcWrite(pin, target);
+    status = target;
+  } else if (ledcFade(pin, status, target, light_fade_ms)) {
+    status = target;
+  }
+}
+
+void lights_update(void) {
+  light_fade_to(PIN_LIGHT1, pwm_channel_light1_status, light1_target);
+  light_fade_to(PIN_LIGHT2, pwm_channel_light2_status, light2_target);
 }
 
 
@@ -255,11 +271,11 @@ void restore_state(void) {
   int time = get_time_minutes();
 
   pwm_channel_fan_status = fan_duty_at(time);
-  pwm_channel_light1_status = light_duty_at(1, time);
-  pwm_channel_light2_status = light_duty_at(2, time);
   ledcWrite(PIN_FAN, pwm_channel_fan_status);
-  ledcWrite(PIN_LIGHT1, pwm_channel_light1_status);
-  ledcWrite(PIN_LIGHT2, pwm_channel_light2_status);
+  // Lights fade up from off to their current level
+  light1_target = light_duty_at(1, time);
+  light2_target = light_duty_at(2, time);
+  lights_update();
 
   for (int i=0; i<fan_times_length; i++) {
     if (fan_times[i][0] <= time) fan_times_status[i] = false;
@@ -424,6 +440,7 @@ void loop() {
   timer_pump_check();
   timer_fan_check();
   timer_light_check();
+  lights_update();
   draw_time();
   draw_pump();
   display.display();

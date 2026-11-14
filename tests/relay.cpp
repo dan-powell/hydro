@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#define RELAY_PIN_1 17 // Pin for relay 1
+#define RELAY_PIN_1 16 // Pin for relay 1 (RX2)
 
 void setup() {
     Serial.begin(115200);

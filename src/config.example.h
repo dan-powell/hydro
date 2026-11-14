@@ -17,16 +17,20 @@ const int   daylightOffset_sec = 3600; // Daylight Savings Offset
 
 // Pin assignments (GPIO numbers) - check these match your wiring
 // Avoid GPIO 21/22 (I2C display) and strapping pins 0, 2, 5, 12, 15
-#define PIN_PUMP    17 // Relay for the water pump
+#define PIN_PUMP    16 // Relay for the water pump (RX2)
 #define PIN_WATER   27 // Water level sensor (digital, HIGH = OK). Needs an external pull-up/down
-#define PIN_FAN     4  // Fan PWM
-#define PIN_LIGHT1  25 // Light 1 PWM
-#define PIN_LIGHT2  26 // Light 2 PWM
+#define PIN_FAN     17 // Fan PWM (TX2)
+#define PIN_LIGHT1  18 // Light 1 PWM (D18)
+#define PIN_LIGHT2  19 // Light 2 PWM (D19)
 
 // PWM settings (shared by fan and lights)
 // 25kHz is the standard for 4-pin PC fans and is above audible range
 const int pwm_frequency  = 25000; // Hz
 const int pwm_resolution = 8;     // bits - duty values below are 0-255
+
+// Light fade time when changing brightness, in milliseconds (0 = no fade)
+// Hardware fades are limited to about 10 seconds at 25kHz / 8-bit; longer values just fade faster
+const int light_fade_ms = 3000;
 
 // Pumping config
 // The pump runs for pump_duration seconds at each time

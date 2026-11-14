@@ -6,7 +6,7 @@ Firmware for an ESP32-based hydroponics controller. It runs a water pump on a ti
 
 - **Scheduled watering**: the pump runs for a set number of seconds at each configured time of day.
 - **Fan control**: fan speed (PWM) changes at scheduled times.
-- **Grow lights**: two independently dimmable lights (PWM), scheduled together or separately.
+- **Grow lights**: two independently dimmable lights (PWM), scheduled together or separately, with smooth fades between levels.
 - **Water level monitoring**: the display shows `~ OK` or `~ LOW` from a digital level sensor.
 - **OLED status display**: water level, light and fan levels, current time, and the next watering time.
 - **Network time**: the clock is set from an NTP server at boot. WiFi is then turned off, and the ESP32's internal clock keeps time.
@@ -29,11 +29,11 @@ These are the defaults in `src/config.example.h`. Change them to match your wiri
 
 | Function | GPIO |
 |---|---|
-| Pump relay | 17 |
-| Water level sensor | 27 |
-| Fan PWM | 4 |
-| Light 1 PWM | 25 |
-| Light 2 PWM | 26 |
+| Pump relay | 16 (RX2) |
+| Water level sensor | 27 (not yet confirmed) |
+| Fan PWM | 17 (TX2) |
+| Light 1 PWM | 18 (D18) |
+| Light 2 PWM | 19 (D19) |
 
 Avoid GPIO 21 and 22 (the display) and the ESP32 strapping pins 0, 2, 5, 12 and 15.
 
@@ -145,6 +145,14 @@ const int pwm_resolution = 8;     // bits; gives the 0-255 duty range used above
 ```
 
 If you change the resolution, the duty values in your schedules and the percentages on the display need to change to match.
+
+### Light fading
+
+```cpp
+const int light_fade_ms = 3000; // fade time in milliseconds; 0 = switch instantly
+```
+
+The lights fade smoothly to each new level, including when they come on after a reboot. The fade is done by the ESP32's PWM hardware, so it keeps running during a watering. It's limited to about 10 seconds; longer values just fade faster. The fan always changes speed instantly.
 
 ## How it behaves
 

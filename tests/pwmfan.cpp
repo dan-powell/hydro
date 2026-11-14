@@ -18,7 +18,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-int pinFan1Rpm = 4;
+int pinFan1Rpm = 17; // TX2
 int freq = 25000;
 int resolution = 8;
 
