@@ -42,10 +42,6 @@ bool light_times_status[100];
 int fan_times_length = 0;
 bool fan_times_status[1440];
 
-const int pwm_channel_fan = 1;
-const int pwm_channel_light1 = 2;
-const int pwm_channel_light2 = 3;
-
 int pwm_channel_fan_status = 0;
 int pwm_channel_light1_status = 0;
 int pwm_channel_light2_status = 0;
@@ -152,7 +148,7 @@ void pump_run(void) {
 }
 
 void fan_update(int duty) {
-  ledcWrite(pwm_channel_fan, duty);  
+  ledcWrite(PIN_FAN, duty);  
 }
 
 // Check if we need to run the next time
@@ -186,7 +182,7 @@ void timer_fan_check(void) {
   for (int i=0; i<fan_times_length; i++) {
     if (fan_times[i][0] == time) {
       if (fan_times_status[i] == true) {
-        ledcWrite(pwm_channel_fan, fan_times[i][1]);
+        ledcWrite(PIN_FAN, fan_times[i][1]);
         pwm_channel_fan_status = fan_times[i][1];
         fan_times_status[i] = false;
       }
@@ -201,17 +197,17 @@ void timer_light_check(void) {
     if (light_times[i][0] == time) {
       if (light_times_status[i] == true) {
         if (light_times[i][1] == 0) {
-          ledcWrite(pwm_channel_light1, light_times[i][2]);
-          ledcWrite(pwm_channel_light2, light_times[i][2]);
+          ledcWrite(PIN_LIGHT1, light_times[i][2]);
+          ledcWrite(PIN_LIGHT2, light_times[i][2]);
           pwm_channel_light1_status = light_times[i][2];
           pwm_channel_light2_status = light_times[i][2];
         }
         if (light_times[i][1] == 1) {
-          ledcWrite(pwm_channel_light1, light_times[i][2]);
+          ledcWrite(PIN_LIGHT1, light_times[i][2]);
           pwm_channel_light1_status = light_times[i][2];
         }
         if (light_times[i][1] == 2) {
-          ledcWrite(pwm_channel_light2, light_times[i][2]);
+          ledcWrite(PIN_LIGHT2, light_times[i][2]);
           pwm_channel_light2_status = light_times[i][2];
         }
         light_times_status[i] = false;
@@ -343,16 +339,13 @@ void setup() {
 
   // Set PWM pins
   // Fan
-  ledcSetup(pwm_channel_fan, pwm_frequency, pwm_resolution);
-  ledcAttachPin(PIN_FAN, pwm_channel_fan);
-  ledcWrite(pwm_channel_fan, 0);
+  ledcAttach(PIN_FAN, pwm_frequency, pwm_resolution);
+  ledcWrite(PIN_FAN, 0);
   // Lights 1 & 2
-  ledcSetup(pwm_channel_light1, pwm_frequency, pwm_resolution);
-  ledcAttachPin(PIN_LIGHT1, pwm_channel_light1);
-  ledcWrite(pwm_channel_light1, 0);
-  ledcSetup(pwm_channel_light2, pwm_frequency, pwm_resolution);
-  ledcAttachPin(PIN_LIGHT2, pwm_channel_light2);
-  ledcWrite(pwm_channel_light2, 0);
+  ledcAttach(PIN_LIGHT1, pwm_frequency, pwm_resolution);
+  ledcWrite(PIN_LIGHT1, 0);
+  ledcAttach(PIN_LIGHT2, pwm_frequency, pwm_resolution);
+  ledcWrite(PIN_LIGHT2, 0);
 
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 

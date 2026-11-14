@@ -20,27 +20,25 @@
 
 int pinFan1Rpm = 4;
 int freq = 25000;
-int fanChannel = 0;
 int resolution = 8;
 
 void setup() {
-  ledcSetup(fanChannel, freq, resolution);
-  ledcAttachPin(pinFan1Rpm, fanChannel);
-  ledcWrite(fanChannel, 255);
+  ledcAttach(pinFan1Rpm, freq, resolution);
+  ledcWrite(pinFan1Rpm, 255);
 }
 
 void loop(){
   // increase the LED brightness
   for(int dutyCycle = 0; dutyCycle <= 255; dutyCycle++){   
     // changing the LED brightness with PWM
-    ledcWrite(fanChannel, dutyCycle);
+    ledcWrite(pinFan1Rpm, dutyCycle);
     delay(15);
   }
 
   // decrease the LED brightness
   for(int dutyCycle = 255; dutyCycle >= 0; dutyCycle--){
     // changing the LED brightness with PWM
-    ledcWrite(fanChannel, dutyCycle);   
+    ledcWrite(pinFan1Rpm, dutyCycle);   
     delay(15);
   }
 }
