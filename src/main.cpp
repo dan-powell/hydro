@@ -217,6 +217,59 @@ void timer_light_check(void) {
 }
 
 
+// Work out the duty the fan should be at for a given time, from the most
+// recent schedule entry. If nothing has happened yet today, carry over the
+// last entry of the day (i.e. what was set yesterday evening).
+// Returns 0 if there are no entries.
+int fan_duty_at(int time) {
+  int best_today = -1, best_today_time = -1;
+  int best_any = -1, best_any_time = -1;
+  for (int i=0; i<fan_times_length; i++) {
+    int t = fan_times[i][0];
+    // >= so that later entries win ties, matching timer_fan_check
+    if (t >= best_any_time) { best_any_time = t; best_any = i; }
+    if (t <= time && t >= best_today_time) { best_today_time = t; best_today = i; }
+  }
+  int index = (best_today != -1) ? best_today : best_any;
+  return (index == -1) ? 0 : fan_times[index][1];
+}
+
+// As fan_duty_at, for light 1 or 2. Entries for "both" (0) count for either.
+int light_duty_at(int light, int time) {
+  int best_today = -1, best_today_time = -1;
+  int best_any = -1, best_any_time = -1;
+  for (int i=0; i<light_times_length; i++) {
+    if (light_times[i][1] != 0 && light_times[i][1] != light) continue;
+    int t = light_times[i][0];
+    if (t >= best_any_time) { best_any_time = t; best_any = i; }
+    if (t <= time && t >= best_today_time) { best_today_time = t; best_today = i; }
+  }
+  int index = (best_today != -1) ? best_today : best_any;
+  return (index == -1) ? 0 : light_times[index][2];
+}
+
+// On boot, put the fan and lights into the state the schedule says they
+// should be in now, and mark today's earlier entries as done.
+// The pump is deliberately not caught up - missed waterings are skipped.
+void restore_state(void) {
+  int time = get_time_minutes();
+
+  pwm_channel_fan_status = fan_duty_at(time);
+  pwm_channel_light1_status = light_duty_at(1, time);
+  pwm_channel_light2_status = light_duty_at(2, time);
+  ledcWrite(PIN_FAN, pwm_channel_fan_status);
+  ledcWrite(PIN_LIGHT1, pwm_channel_light1_status);
+  ledcWrite(PIN_LIGHT2, pwm_channel_light2_status);
+
+  for (int i=0; i<fan_times_length; i++) {
+    if (fan_times[i][0] <= time) fan_times_status[i] = false;
+  }
+  for (int i=0; i<light_times_length; i++) {
+    if (light_times[i][0] <= time) light_times_status[i] = false;
+  }
+}
+
+
 // Check if we need to reset the timers
 void reset_check(void) {
   // get the time elapsed in minutes
@@ -362,6 +415,8 @@ void setup() {
   // Update system clock from NTP
   updateTimeNtp();
   timers_setup();
+  // Catch up fan and lights in case we rebooted part way through the day
+  restore_state();
 }
 
 void loop() {
